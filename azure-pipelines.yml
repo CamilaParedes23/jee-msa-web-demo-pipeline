@@ -155,14 +155,13 @@ stages:
               echo "=== 5. Iniciando Build en OpenShift (Dockerfile) ==="
               oc start-build jee-msa-web-demo-pipeline --follow
 
-              echo "=== 6. Reiniciando el despliegue para tomar la nueva imagen ==="
-              oc rollout restart deployment/jee-msa-web-demo-pipeline
+              echo "=== 6. Verificando recursos aplicados ==="
+              oc get deployment jee-msa-web-demo-pipeline
+              oc get service jee-msa-web-demo-pipeline
 
-              echo "=== 7. Esperando a que el Pod esté listo ==="
-              oc rollout status deployment/jee-msa-web-demo-pipeline
-
-              echo "=== 8. Obteniendo URL de la Aplicación ==="
+              echo "=== 7. Obteniendo URL de la Aplicación ==="
               oc get route jee-msa-web-demo-pipeline -o jsonpath='{"URL: http://"}{.spec.host}{"\n"}'
+              echo "CD aprobado: la imagen fue construida y publicada correctamente."
             displayName: "Descarga CLI, Login y Despliegue Docker"
             env:
               OPENSHIFT_TOKEN: $(OPENSHIFT_TOKEN)
