@@ -144,7 +144,7 @@ stages:
               oc whoami --show-server
 
               echo "=== 3. Seleccionando Proyecto ==="
-              oc project testing-account-dev
+              oc project camilaparedes-dev
 
               echo "=== 4. Aplicando Manifiestos (Creando BuildConfig y Deployment) ==="
               oc apply -f helm/build-config.yaml
