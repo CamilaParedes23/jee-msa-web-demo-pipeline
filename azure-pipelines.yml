@@ -8,120 +8,140 @@ trigger:
       - develop
 
 pool:
-  vmImage: 'ubuntu-24.04'
+  vmImage: "ubuntu-24.04"
 
 stages:
-
   # ==========================================
   # STAGE 1: INTEGRACIÓN CONTINUA (CI)
   # ==========================================
   - stage: CI
-    displayName: 'CI'
+    displayName: "CI"
     jobs:
       - job: prevalidation
-        displayName: 'Prevalidar'
+        displayName: "Prevalidar"
         steps:
           - script: echo "Simulación de verificación de la estructura del repositorio realizada correctamente."
-            displayName: 'Validación inicial'
+            displayName: "Validación inicial"
 
       - job: build
-        displayName: 'Compilar'
+        displayName: "Compilar"
         dependsOn: prevalidation
         steps:
           # 1. Descargar el JDK 25 usando la API de Adoptium
           - script: |
               echo "Descargando JDK 25..."
               curl -L -o $(Agent.TempDirectory)/jdk25.tar.gz "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse"
-            displayName: 'Descargar JDK 25'
+            displayName: "Descargar JDK 25"
 
           # 2. Usar la tarea nativa para instalar java y configurar JAVA_HOME
           - task: JavaToolInstaller@0
             inputs:
-              versionSpec: '25'
-              jdkArchitectureOption: 'x64'
-              jdkSourceOption: 'LocalDirectory'
-              jdkFile: '$(Agent.TempDirectory)/jdk25.tar.gz'
-              jdkDestinationDirectory: '$(Agent.ToolsDirectory)/jdk'
+              versionSpec: "25"
+              jdkArchitectureOption: "x64"
+              jdkSourceOption: "LocalDirectory"
+              jdkFile: "$(Agent.TempDirectory)/jdk25.tar.gz"
+              jdkDestinationDirectory: "$(Agent.ToolsDirectory)/jdk"
               cleanDestinationDirectory: true
-            displayName: 'Instalar Java 25'
+            displayName: "Instalar Java 25"
 
           # 3. Compilar
           - script: |
               chmod +x gradlew
               ./gradlew compileJava -x test
-            displayName: 'Compilar con Gradle'
+            displayName: "Compilar con Gradle"
 
       - job: test
-        displayName: 'Pruebas y Cobertura'
+        displayName: "Pruebas y Cobertura"
         dependsOn: build
         steps:
           # 1. Descargar el JDK 25 usando la API de Adoptium
           - script: |
               echo "Descargando JDK 25..."
               curl -L -o $(Agent.TempDirectory)/jdk25.tar.gz "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse"
-            displayName: 'Descargar JDK 25'
+            displayName: "Descargar JDK 25"
 
           # 2. Usar la tarea nativa para instalar java y configurar JAVA_HOME
           - task: JavaToolInstaller@0
             inputs:
-              versionSpec: '25'
-              jdkArchitectureOption: 'x64'
-              jdkSourceOption: 'LocalDirectory'
-              jdkFile: '$(Agent.TempDirectory)/jdk25.tar.gz'
-              jdkDestinationDirectory: '$(Agent.ToolsDirectory)/jdk'
+              versionSpec: "25"
+              jdkArchitectureOption: "x64"
+              jdkSourceOption: "LocalDirectory"
+              jdkFile: "$(Agent.TempDirectory)/jdk25.tar.gz"
+              jdkDestinationDirectory: "$(Agent.ToolsDirectory)/jdk"
               cleanDestinationDirectory: true
-            displayName: 'Instalar Java 25'
+            displayName: "Instalar Java 25"
 
           # 3. Ejecutar pruebas y cobertura
           - script: |
               chmod +x gradlew
               ./gradlew check
-            displayName: 'Ejecutar Pruebas y Cobertura'
+            displayName: "Ejecutar Pruebas y Cobertura"
 
           # Publica el reporte visual de JaCoCo
           - task: PublishCodeCoverageResults@2
             inputs:
-              summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/build/reports/jacoco/test/jacocoTestReport.xml'
-              pathToSources: '$(System.DefaultWorkingDirectory)/src/main/java'
-            displayName: 'Publicar Cobertura en Azure DevOps'
+              summaryFileLocation: "$(System.DefaultWorkingDirectory)/**/build/reports/jacoco/test/jacocoTestReport.xml"
+              pathToSources: "$(System.DefaultWorkingDirectory)/src/main/java"
+            displayName: "Publicar Cobertura en Azure DevOps"
 
   # ==========================================
-  # STAGE 2: APROBACIÓN MANUAL (APPROVAL)
+  # STAGE 2: VALIDACIÓN RÁPIDA (QUICK CHECK)
   # ==========================================
-  - stage: Approval
-    displayName: 'Aprobar'
+  - stage: QuickCheck
+    displayName: "Validación rápida"
     dependsOn: CI
     condition: succeeded()
     jobs:
+      - job: quick_check
+        displayName: "Comprobar pipeline"
+        steps:
+          - script: echo "Validación rápida completada correctamente."
+            displayName: "Ejecutar validación rápida"
+
+  # ==========================================
+  # STAGE 3: APROBACIÓN MANUAL (APPROVAL)
+  # ==========================================
+  - stage: Approval
+    displayName: "Aprobar"
+    dependsOn: QuickCheck
+    condition: succeeded()
+    jobs:
       - job: manual_gate
-        displayName: 'Esperando aprobación'
+        displayName: "Esperando aprobación"
         pool: server
         steps:
           - task: ManualValidation@0
             inputs:
-              notifyUsers: 'jefersonvillacis@hotmail.com'
-              instructions: 'Aprobación requerida para ejecutar la fase de despliegue continuo en OpenShift Sandbox.'
-              onTimeout: 'reject'
+              notifyUsers: "jefersonvillacis@hotmail.com"
+              instructions: "Aprobación requerida para ejecutar la fase de despliegue continuo en OpenShift Sandbox."
+              onTimeout: "reject"
 
   # ==========================================
-  # STAGE 3: DESPLIEGUE CONTINUO (CD)
+  # STAGE 4: DESPLIEGUE CONTINUO (CD)
   # ==========================================
   - stage: CD
-    displayName: 'CD'
+    displayName: "CD"
     dependsOn: Approval
     condition: succeeded()
     jobs:
       - job: deploy_openshift
-        displayName: 'Desplegar en OpenShift'
+        displayName: "Desplegar en OpenShift"
         steps:
           - script: |
+              set -euo pipefail
+
               echo "=== 1. Descargando e instalando OpenShift CLI (oc) ==="
               curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
               tar -xzf openshift-client-linux.tar.gz
               sudo mv oc /usr/local/bin/
 
               echo "=== 2. Autenticando en el Clúster ==="
-              oc login --token=$(OPENSHIFT_TOKEN) --server=$(OPENSHIFT_SERVER) --insecure-skip-tls-verify=true
+              if [ -z "$OPENSHIFT_TOKEN" ] || [ -z "$OPENSHIFT_SERVER" ]; then
+                echo "Las variables OPENSHIFT_TOKEN y OPENSHIFT_SERVER son obligatorias."
+                exit 1
+              fi
+              oc login --token="$OPENSHIFT_TOKEN" --server="$OPENSHIFT_SERVER" --insecure-skip-tls-verify=true
+              oc whoami --show-server
 
               echo "=== 3. Seleccionando Proyecto ==="
               oc project testing-account-dev
@@ -143,19 +163,22 @@ stages:
 
               echo "=== 8. Obteniendo URL de la Aplicación ==="
               oc get route jee-msa-web-demo-pipeline -o jsonpath='{"URL: http://"}{.spec.host}{"\n"}'
-            displayName: 'Descarga CLI, Login y Despliegue Docker'
+            displayName: "Descarga CLI, Login y Despliegue Docker"
+            env:
+              OPENSHIFT_TOKEN: $(OPENSHIFT_TOKEN)
+              OPENSHIFT_SERVER: $(OPENSHIFT_SERVER)
 
   # ==========================================
-  # STAGE 4: NOTIFICACIONES (NOTIFICATIONS)
+  # STAGE 5: NOTIFICACIONES (NOTIFICATIONS)
   # ==========================================
   - stage: Notifications
-    displayName: 'Notificar'
+    displayName: "Notificar"
     dependsOn: [CI, Approval, CD]
     condition: always()
     jobs:
       - job: send_status_email
-        displayName: 'Enviar Reporte'
+        displayName: "Enviar Reporte"
         steps:
           - script: |
               echo "Estado final de la ejecución del pipeline construido por Jeferson Villacís: $(Agent.JobStatus)"
-            displayName: 'Simulación de Envío de Correo Electrónico'
+            displayName: "Simulación de Envío de Correo Electrónico"
